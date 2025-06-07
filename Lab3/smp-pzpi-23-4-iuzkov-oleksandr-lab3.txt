@@ -1,0 +1,718 @@
+Харківський національний університет радіоелектроніки
+Факультет комп’ютерних наук
+Катедра програмної інженерії
+ 
+ 
+Звіт
+з лабораторної роботи № 3
+з дисципліни «Скриптові мови програмування»
+на тему: «Продовольчий магазин "Весна"»
+
+ 
+ 
+ 
+Виконав:                                                                           Перевірив:
+ст. гр. ПЗПІ-23-4                                                              ст. викладач кафедри ПІ
+Юзков Олександр                                            	         Сокорчук Ігор Петрович
+ 
+ 
+ 
+Харків 2025
+1 ІСТОРІЯ ЗМІН
+
+№	Дата	Версія звіту	Опис змін та виправлень
+1	01.06.2025	0.1	Зроблено звіт
+2 ЗАВДАННЯ
+Метою лабораторної роботи є створення функціонального вебпроєкту — інтернет-магазину, який складається з двох основних сторінок: «Сторінка товарів» і «Кошик». Кожна сторінка містить стандартні структурні елементи: шапку, основну частину та підвал. На сторінці товарів користувач може переглядати список товарів, вказувати потрібну кількість і натискати кнопку «Купити», яка надсилає форму методом POST на сервер. Дані додаються до сесії, після чого користувача перенаправляють на сторінку кошика. На сторінці кошика відображається таблиця з вибраними товарами, де показані назва, кількість, ціна та загальна вартість кожного товару. Якщо кошик порожній, виводиться відповідне повідомлення з посиланням на сторінку товарів.
+
+    3 ОПИС ВИКОНАНОЇ РОБОТИ
+Усі файли веб-сайту «Продовольчий магазин "Весна"» наведені в додатку В, а посилання на відеозапис роботи програми — у додатку А. Графічні матеріали знаходяться в додатку Б.
+	Спершу я створив файл index.php, у якому реалізував маршрутизацію — логіку вибору сторінки для завантаження залежно від URL. Для цього використовується глобальний масив $_SERVER['REQUEST_URI'], з якого отримується запитаний шлях. Потім цей шлях очищується від зайвих символів, і якщо він порожній, відображається домашня сторінка (home). Якщо шлях не порожній, підключається відповідний файл зі сторінками з папки pages. Якщо такого файлу немає, показується сторінка з повідомленням про помилку 404. Окремо підключаються заголовок (header.php) та футер (footer.php) з папки components. Зразок вигляду головної сторінки наведено в додатку Б (рис. Б.1).
+
+    1 <?php
+    2 $path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+    3 $page = trim($path, '/') ?: 'home';
+    4 $pageFile = "pages/$page.php";
+    5 ?>
+    6 
+    7 <!DOCTYPE html>
+    8 <html lang="uk">
+    9 
+    10 <head>
+    11     <meta charset="UTF-8" />
+    12     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    13     <title>Продуктовий магазин Весна</title>
+    14     <link rel="stylesheet" href="styles/style.css" />
+    15 </head>
+    16 
+    17 <body>
+    18     <?php require_once "components/header.php"; ?>
+    19 
+    20     <main>
+    21         <?php
+    22         if (is_file($pageFile)) {
+    23             require_once $pageFile;
+    24         } else {
+    25             require_once "pages/page_404.php";
+    26         }
+    27         ?>
+    28     </main>
+    29 
+    30     <?php require_once "components/footer.php"; ?>
+    31 </body>
+    32 
+    33 </html>
+
+Далі я створив файл initialise_database.php, у якому реалізував створення локальної бази даних SQLite для збереження інформації про товари. Підключення здійснюється через об'єкт PDO, що забезпечує зручну та безпечну роботу з базою даних. Якщо файл бази store_database.db відсутній, він автоматично створюється в поточній директорії. У цьому файлі виконується SQL-запит на створення таблиці products, яка містить дані про товари — їх назву та ціну. Використання конструкції IF NOT EXISTS запобігає повторному створенню таблиці, якщо вона вже існує. Після цього таблиця наповнюється тестовими записами з типовими продуктами. В кінці виводиться повідомлення про успішне створення бази даних і таблиці.
+
+    1 <?php
+    2 $dbPath = __DIR__ . '/store_database.db';
+    3 $pdo = new PDO('sqlite:' . $dbPath);
+    4 $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    5 
+    6 $pdo->exec("
+    7     CREATE TABLE IF NOT EXISTS products (
+    8         id INTEGER PRIMARY KEY AUTOINCREMENT,
+    9         name TEXT NOT NULL UNIQUE,
+    10         price REAL NOT NULL
+    11     )
+    12 ");
+    13 
+    14 $pdo->exec("DELETE FROM products ");
+    15 
+    16 $pdo->exec("DELETE FROM sqlite_sequence WHERE name='products'");
+    17 
+    18 $pdo->exec("
+    19     INSERT INTO products (name, price) VALUES
+    20     ('Яблука червоні', 17.50),
+    21     ('Картопля молода', 11.20),
+    22     ('Морква свіжа', 8.30),
+    23     ('Огірки короткоплідні', 23.00),
+    24     ('Помідори рожеві', 27.40),
+    25     ('Яйця курячі, 10 шт.', 32.00),
+    26     ('Олія соняшникова', 49.90)
+    27 ");
+    28 
+    29 echo "База даних та таблиці були успішно створені!";
+Щоб уникнути дублювання коду підключення до бази даних у різних файлах проєкту, я виніс цю логіку в окремий файл database_functions.php. У цьому файлі реалізовано дві функції. Перша — createConnection() — встановлює з’єднання з локальною базою даних SQLite, налаштовує режим обробки помилок через винятки (PDO::ERRMODE_EXCEPTION) та повертає об’єкт підключення ($pdo), який можна використовувати в інших частинах сайту. Друга функція — fetchProducts($pdo) — приймає об’єкт підключення як параметр, виконує SQL-запит до таблиці products і повертає всі товари у вигляді асоціативного масиву. Ця функція застосовується для відображення списку товарів на сторінці магазину.
+
+    1 <?php
+    2 
+    3 function createConnection(): PDO {
+    4     $databaseFile = __DIR__ . '/store_database.db';
+    5     $connection = new PDO("sqlite:$databaseFile");
+    6     $connection->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    7     return $connection;
+    8 }
+    9 
+    10 function fetchProducts(PDO $connection): array {
+    11     $query = $connection->query("SELECT * FROM products ORDER BY id ASC");
+    12     return $query->fetchAll(PDO::FETCH_ASSOC);
+    13 }
+
+У файлі save_to_cart.php реалізовано обробку форми додавання товарів до кошика. Для збереження вибраних користувачем товарів без використання бази даних застосовується сесія (session_start()). Якщо змінна сесії cart ще не існує, вона ініціалізується як порожній масив. Скрипт приймає дані, надіслані методом POST, і перевіряє кількість кожного товару: вона повинна бути числом у діапазоні від 0 до 99. У разі виявлення помилки користувач повертається на сторінку /products із повідомленням про помилку та збереженими введеними даними для повторного редагування. Якщо кількість товару більша за 0, він додається до кошика — оновлюється кількість, якщо товар уже є, або створюється новий запис. Якщо хоча б один товар успішно доданий, кошик оновлюється, повідомлення про помилки видаляються, і користувача перенаправляють на сторінку /cart. Якщо ж не було додано жодного товару, відображається повідомлення про необхідність вибрати хоча б один товар.
+
+    1 <?php
+    2 session_start();
+    3 
+    4 if (!isset($_SESSION['shopping_cart'])) {
+    5     $_SESSION['shopping_cart'] = [];
+    6 }
+    7 
+    8 $currentCart = $_SESSION['shopping_cart'];
+    9 $submittedItems = $_POST['cart'] ?? [];
+    10 $validItemExists = false;
+    11 
+    12 foreach ($submittedItems as $productId => $productData) {
+    13     $productName = trim($productData['name']);
+    14     $productQuantity = (int)$productData['quantity'];
+    15     $productPrice = (float)$productData['price'];
+    16 
+    17     if ($productQuantity < 0 || $productQuantity > 99) {
+    18         $_SESSION['input_data'] = $submittedItems;
+    19         $_SESSION['input_error'] = 'Перевірте будь ласка введені дані.';
+    20         header('Location: /products');
+    21         exit;
+    22     }
+    23 
+    24     if ($productQuantity > 0) {
+    25         $validItemExists = true;
+    26 
+    27         if (isset($currentCart[$productId])) {
+    28             $currentCart[$productId]['quantity'] += $productQuantity;
+    29         } else {
+    30             $currentCart[$productId] = [
+    31                 'name' => $productName,
+    32                 'quantity' => $productQuantity,
+    33                 'price' => $productPrice
+    34             ];
+    35         }
+    36     }
+    37 }
+    38 
+    39 if ($validItemExists) {
+    40     $_SESSION['shopping_cart'] = $currentCart;
+    41     unset($_SESSION['input_data'], $_SESSION['input_error']);
+    42     header('Location: /cart');
+    43     exit;
+    44 }
+    45 
+    46 $_SESSION['input_error'] = 'Будь ласка, додайте хоча б один товар.';
+    47 $_SESSION['input_data'] = $submittedItems;
+    48 header('Location: /products');
+    49 exit;
+
+У файлі products.php реалізовано відображення сторінки зі списком товарів, які можна додати до кошика. Спочатку запускається сесія за допомогою session_start(), після чого підключаються необхідні функції для роботи з базою даних. Через функцію fetchProducts() завантажується перелік усіх товарів із таблиці products. Якщо користувач раніше надсилав форму з помилками, то з сесії завантажуються збережені введені дані (input_data) та повідомлення про помилки (input_error), які потім видаляються, щоб не відображались при наступних переглядах сторінки. Основна частина сторінки — це HTML-форма з таблицею, де для кожного товару відображаються його ID, назва, ціна і поле для введення кількості. Назва і ціна передаються у формі прихованими полями, а користувач вводить кількість самостійно. Форма надсилається методом POST на save_to_cart.php, що дозволяє одночасно вибрати і додати до кошика декілька товарів. Зображення сторінки наведено у додатку Б (рис. Б.2).
+
+    1 <?php 
+    2 session_start();
+    3 require_once __DIR__ . '/../database/database_functions.php';
+    4 $databaseConnection = createConnection();
+    5 $availableProducts = fetchProducts($databaseConnection);
+    6 
+    7 $previousInput = $_SESSION['input_data'] ?? [];
+    8 $errorMessage = $_SESSION['input_error'] ?? '';
+    9 unset($_SESSION['input_data'], $_SESSION['input_error']);
+    10 ?>
+    11 
+    12 <div class="product-page">
+    13     <h1>Доступні товари</h1>
+    14 
+    15     <?php if ($errorMessage): ?>
+    16     <div class="error-message"><?php echo htmlspecialchars($errorMessage); ?></div>
+    17     <?php endif; ?>
+    18 
+    19     <form method="POST" action="/utils/save_to_cart.php" class="product-selection-form">
+    20         <table class="custom-table">
+    21             <thead>
+    22                 <tr>
+    23                     <th>ID</th>
+    24                     <th>Назва</th>
+    25                     <th>Кількість</th>
+    26                     <th>Ціна</th>
+    27                 </tr>
+    28             </thead>
+    29             <tbody>
+    30                 <?php foreach ($availableProducts as $item): 
+    31                 $productId = $item['id'];
+    32                 $quantityValue = $previousInput[$productId]['quantity'] ?? 0;
+    33             ?>
+    34                 <tr>
+    35                     <td><?php echo $productId; ?></td>
+    36                     <td><?php echo htmlspecialchars($item['name']); ?></td>
+    37                     <td>
+    38                         <input type="hidden" name="cart[<?php echo $productId; ?>][name]"
+    39                             value="<?php echo htmlspecialchars($item['name']); ?>">
+    40                         <input type="number" name="cart[<?php echo $productId; ?>][quantity]"
+    41                             value="<?php echo htmlspecialchars($quantityValue); ?>" class="quantity-input">
+    42                         <input type="hidden" name="cart[<?php echo $productId; ?>][price]"
+    43                             value="<?php echo $item['price']; ?>">
+    44                     </td>
+    45                     <td><?php echo $item['price']; ?> грн</td>
+    46                 </tr>
+    47                 <?php endforeach; ?>
+    48             </tbody>
+    49         </table>
+    50 
+    51         <div class="form-actions">
+    52             <button type="submit" class="submit-button">Додати до кошика</button>
+    53         </div>
+    54     </form>
+    55 </div>
+
+Файл cart.php відповідає за відображення кошика користувача та обробку пов’язаних із ним дій. Спершу відкривається сесія за допомогою session_start(), після чого перевіряється, чи була надіслана форма методом POST. У коді реалізовано три основні функції: видалення товару з кошика за його ID, повне очищення кошика кнопкою «Очистити» та оформлення покупки, при якому кошик очищується, а користувачу виводиться повідомлення про успішну оплату.
+Інформація про вміст кошика зберігається в сесії ($_SESSION['cart']). Якщо кошик порожній, виводиться відповідне повідомлення із кнопкою для повернення до каталогу товарів. Якщо ж у кошику є товари, вони відображаються у вигляді таблиці з детальною інформацією: ID, назва, ціна, кількість, сума за кожну позицію, а також кнопка «Видалити» для кожного товару. Під таблицею показується підсумкова сума. Для зручності користувача передбачена форма з двома кнопками — для очищення всього кошика та для переходу до оформлення покупки (симуляції оплати). Зображення сторінки кошика наведено у додатку Б (рис. Б.3).
+
+    1 <?php
+    2 session_start();
+    3 
+    4 $totalPrice = 0;
+    5 
+    6 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    7     if (!empty($_POST['remove_id'])) {
+    8         $removeId = $_POST['remove_id'];
+    9         if (isset($_SESSION['shopping_cart'][$removeId])) {
+    10             unset($_SESSION['shopping_cart'][$removeId]);
+    11         }
+    12     } elseif (!empty($_POST['action'])) {
+    13         switch ($_POST['action']) {
+    14             case 'clear':
+    15                 $_SESSION['shopping_cart'] = [];
+    16                 break;
+    17             case 'pay':
+    18                 $_SESSION['shopping_cart'] = [];
+    19                 $_SESSION['success_message'] = 'Дякуємо за покупку!';
+    20                 header('Location: /cart');
+    21                 exit;
+    22         }
+    23     }
+    24 }
+    25 
+    26 $cartItems = $_SESSION['shopping_cart'] ?? [];
+    27 $successMsg = $_SESSION['success_message'] ?? null;
+    28 unset($_SESSION['success_message']);
+    29 ?>
+    30 
+    31 <div class="cart-page">
+    32     <?php if ($successMsg): ?>
+    33         <div class="cart-success"><?php echo htmlspecialchars($successMsg); ?></div>
+    34     <?php endif; ?>
+    35 
+    36     <?php if (empty($cartItems)): ?>
+    37         <div class="cart-empty">
+    38             <p>Ваш кошик порожній.</p>
+    39             <a href="/products" class="button-link">Перейти до покупок</a>
+    40         </div>
+    41     <?php else: ?>
+    42         <h2 class="cart-title">Ваш кошик</h2>
+    43         <table class="cart-table">
+    44             <thead>
+    45                 <tr>
+    46                     <th>ID</th>
+    47                     <th>Назва</th>
+    48                     <th>Ціна</th>
+    49                     <th>Кількість</th>
+    50                     <th>Сума</th>
+    51                     <th>Дія</th>
+    52                 </tr>
+    53             </thead>
+    54             <tbody>
+    55                 <?php foreach ($cartItems as $productId => $product): 
+    56                     $lineTotal = $product['price'] * $product['quantity'];
+    57                     $totalPrice += $lineTotal;
+    58                 ?>
+    59                 <tr>
+    60                     <td><?php echo $productId; ?></td>
+    61                     <td><?php echo htmlspecialchars($product['name']); ?></td>
+    62                     <td><?php echo $product['price']; ?> грн</td>
+    63                     <td><?php echo $product['quantity']; ?></td>
+    64                     <td><?php echo $lineTotal; ?> грн</td>
+    65                     <td>
+    66                         <form method="POST">
+    67                             <input type="hidden" name="remove_id" value="<?php echo $productId; ?>">
+    68                             <button type="submit" class="btn-delete">Видалити</button>
+    69                         </form>
+    70                     </td>
+    71                 </tr>
+    72                 <?php endforeach; ?>
+    73                 <tr class="cart-total-row">
+    74                     <td colspan="4" style="text-align: right;">Разом:</td>
+    75                     <td colspan="2"><?php echo $totalPrice; ?> грн</td>
+    76                 </tr>
+    77             </tbody>
+    78         </table>
+    79 
+    80         <form method="POST" class="cart-actions">
+    81             <button type="submit" name="action" value="clear" class="btn-clear">Очистити</button>
+    82             <button type="submit" name="action" value="pay" class="btn-pay">Сплатити</button>
+    83         </form>
+    84     <?php endif; ?>
+    85 </div>
+
+
+4 ВИСНОВКИ
+У ході виконання лабораторної роботи було створено функціональний веб-сайт інтернет-магазину з базовим набором можливостей. Забезпечено коректну взаємодію між сторінками товарів і кошиком завдяки використанню сесій, що дозволяє зберігати обрані користувачем позиції між переходами. Структура сторінок відповідає стандартним вимогам HTML-документів, включаючи шапку, основну частину та підвал. Особлива увага приділялась перевірці коректності даних, отриманих із форм, та належній обробці помилок. Як результат, створено повноцінний веб-додаток, який дозволяє зручно додавати товари до кошика, переглядати вибрані позиції і здійснювати базову взаємодію із сервером.
+
+ДОДАТОК А
+Відеозапис
+Відеозапис презентації результатів лабораторної роботи: https://youtu.be/EPS1eGimnQM
+Хронологічний опис відеозапису:
+00:00 - Вступ
+00:12 - Завдання
+00:22 - Розгляд програми
+02:00 - Розгляд коду
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ДОДАТОК Б
+Графічні матеріали
+
+Рисунок Б.1 — Головна сторінка
+
+
+Рисунок Б.2 — Сторінка вибору продуктів
+
+
+
+Рисунок Б.3 — Сторінка кошику
+
+
+Рисунок Б.4 — Сторінка “Про Нас”
+
+
+
+
+ДОДАТОК В
+Програмний код
+В.1 index.php
+GitHub репозиторій: https://github.com/NureIuzkovOleksandr/smp-pzpi-23-4-iuzkov-oleksandr/blob/main/Lab3/smp-pzpi-23-4-iuzkov-oleksandr-lab3/index.php
+    1. <?php
+    2. $path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+    3. $page = trim($path, '/') ?: 'home';
+    4. $pageFile = "pages/$page.php";
+    5. ?>
+    6. 
+    7. <!DOCTYPE html>
+    8. <html lang="uk">
+    9. 
+    10. <head>
+    11.     <meta charset="UTF-8" />
+    12.     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    13.     <title>Продуктовий магазин Весна</title>
+    14.     <link rel="stylesheet" href="styles/style.css" />
+    15. </head>
+    16. 
+    17. <body>
+    18.     <?php require_once "components/header.php"; ?>
+    19. 
+    20.     <main>
+    21.         <?php
+    22.         if (is_file($pageFile)) {
+    23.             require_once $pageFile;
+    24.         } else {
+    25.             require_once "pages/page_404.php";
+    26.         }
+    27.         ?>
+    28.     </main>
+    29. 
+    30.     <?php require_once "components/footer.php"; ?>
+    31. </body>
+    32. 
+    33. </html>
+В.2 header.php
+GitHub репозиторій: https://github.com/NureIuzkovOleksandr/smp-pzpi-23-4-iuzkov-oleksandr/blob/main/Lab3/smp-pzpi-23-4-iuzkov-oleksandr-lab3/components/header.php
+    1. <header>
+    2.     <nav class="main-nav">
+    3.         <div class="nav-item">
+    4.             <a href="/">
+    5.                 <span class="nav-icon">🏡</span><span class="nav-label">Home</span>
+    6.             </a>
+    7.         </div>
+    8.         <div class="nav-item">
+    9.             <a href="/products">
+    10.                 <span class="nav-icon">🛍️</span><span class="nav-label">Products</span>
+    11.             </a>
+    12.         </div>
+    13.         <div class="nav-item">
+    14.             <a href="/cart">
+    15.                 <span class="nav-icon">🛒</span><span class="nav-label">Cart</span>
+    16.             </a>
+    17.         </div>
+    18.     </nav>
+    19. </header>
+
+В.3 footer.php
+GitHub репозиторій: https://github.com/NureIuzkovOleksandr/smp-pzpi-23-4-iuzkov-oleksandr/blob/main/Lab3/smp-pzpi-23-4-iuzkov-oleksandr-lab3/components/footer.php
+    20. <footer>
+    21.     <div class="footer-links">
+    22.         <p><a href="/">Home</a></p>
+    23.         <p><a href="/products">Products</a></p>
+    24.         <p><a href="/cart">Cart</a></p>
+    25.         <p><a href="/about_us">About Us</a></p>
+    26.     </div>
+    27. </footer>
+В.4 initialise_database.php
+GitHub репозиторій: https://github.com/NureIuzkovOleksandr/smp-pzpi-23-4-iuzkov-oleksandr/blob/main/Lab3/smp-pzpi-23-4-iuzkov-oleksandr-lab3/database/initialise_database.php
+    28. <?php
+    29. $dbPath = __DIR__ . '/store_database.db';
+    30. $pdo = new PDO('sqlite:' . $dbPath);
+    31. $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    32. 
+    33. $pdo->exec("
+    34.     CREATE TABLE IF NOT EXISTS products (
+    35.         id INTEGER PRIMARY KEY AUTOINCREMENT,
+    36.         name TEXT NOT NULL UNIQUE,
+    37.         price REAL NOT NULL
+    38.     )
+    39. ");
+    40. 
+    41. $pdo->exec("DELETE FROM products ");
+    42. 
+    43. $pdo->exec("DELETE FROM sqlite_sequence WHERE name='products'");
+    44. 
+    45. $pdo->exec("
+    46.     INSERT INTO products (name, price) VALUES
+    47.     ('Яблука червоні', 17.50),
+    48.     ('Картопля молода', 11.20),
+    49.     ('Морква свіжа', 8.30),
+    50.     ('Огірки короткоплідні', 23.00),
+    51.     ('Помідори рожеві', 27.40),
+    52.     ('Яйця курячі, 10 шт.', 32.00),
+    53.     ('Олія соняшникова', 49.90)
+    54. ");
+    55. 
+    56. echo "База даних та таблиці були успішно створені!";
+
+В.5 database_functions.php
+GitHub репозиторій: https://github.com/NureIuzkovOleksandr/smp-pzpi-23-4-iuzkov-oleksandr/blob/main/Lab3/smp-pzpi-23-4-iuzkov-oleksandr-lab3/database/database_functions.php
+    57. <?php
+    58. 
+    59. function createConnection(): PDO {
+    60.     $databaseFile = __DIR__ . '/store_database.db';
+    61.     $connection = new PDO("sqlite:$databaseFile");
+    62.     $connection->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    63.     return $connection;
+    64. }
+    65. 
+    66. function fetchProducts(PDO $connection): array {
+    67.     $query = $connection->query("SELECT * FROM products ORDER BY id ASC");
+    68.     return $query->fetchAll(PDO::FETCH_ASSOC);
+    69. }
+
+В.6 save_to_cart.php
+GitHub репозиторій: https://github.com/NureIuzkovOleksandr/smp-pzpi-23-4-iuzkov-oleksandr/blob/main/Lab3/smp-pzpi-23-4-iuzkov-oleksandr-lab3/utils/save_to_cart.php
+    70. <?php
+    71. session_start();
+    72. 
+    73. if (!isset($_SESSION['shopping_cart'])) {
+    74.     $_SESSION['shopping_cart'] = [];
+    75. }
+    76. 
+    77. $currentCart = $_SESSION['shopping_cart'];
+    78. $submittedItems = $_POST['cart'] ?? [];
+    79. $validItemExists = false;
+    80. 
+    81. foreach ($submittedItems as $productId => $productData) {
+    82.     $productName = trim($productData['name']);
+    83.     $productQuantity = (int)$productData['quantity'];
+    84.     $productPrice = (float)$productData['price'];
+    85. 
+    86.     if ($productQuantity < 0 || $productQuantity > 99) {
+    87.         $_SESSION['input_data'] = $submittedItems;
+    88.         $_SESSION['input_error'] = 'Перевірте будь ласка введені дані.';
+    89.         header('Location: /products');
+    90.         exit;
+    91.     }
+    92. 
+    93.     if ($productQuantity > 0) {
+    94.         $validItemExists = true;
+    95. 
+    96.         if (isset($currentCart[$productId])) {
+    97.             $currentCart[$productId]['quantity'] += $productQuantity;
+    98.         } else {
+    99.             $currentCart[$productId] = [
+    100.                 'name' => $productName,
+    101.                 'quantity' => $productQuantity,
+    102.                 'price' => $productPrice
+    103.             ];
+    104.         }
+    105.     }
+    106. }
+    107. 
+    108. if ($validItemExists) {
+    109.     $_SESSION['shopping_cart'] = $currentCart;
+    110.     unset($_SESSION['input_data'], $_SESSION['input_error']);
+    111.     header('Location: /cart');
+    112.     exit;
+    113. }
+    114. 
+    115. $_SESSION['input_error'] = 'Будь ласка, додайте хоча б один товар.';
+    116. $_SESSION['input_data'] = $submittedItems;
+    117. header('Location: /products');
+    118. exit;
+
+В.7 about_us.php
+GitHub репозиторій: https://github.com/NureIuzkovOleksandr/smp-pzpi-23-4-iuzkov-oleksandr/blob/main/Lab3/smp-pzpi-23-4-iuzkov-oleksandr-lab3/pages/about_us.php
+    119. <div class="about_us-page">
+    120.     <h1>Магазин свіжих продуктів "Весна"</h1>
+    121.     <p>
+    122.         У магазині "Весна" ми дбаємо про те, щоб на вашому столі завжди були натуральні та якісні продукти. Ми співпрацюємо з місцевими фермерами та постачальниками, аби щодня пропонувати вам найкраще.
+    123.     </p>
+    124.     <p>
+    125.         У нас ви знайдете:
+    126.     </p>
+    127.     <ul>
+    128.         <li>Соковиті червоні яблука та молода картопля прямо з грядки</li>
+    129.         <li>Свіжа морква, ароматні огірки та рожеві помідори</li>
+    130.         <li>Домашні яйця та натуральна соняшникова олія</li>
+    131.         <li>Товари для щоденного приготування здорових і смачних страв</li>
+    132.     </ul>
+    133.     <p>
+    134.         Ми щиро вдячні кожному клієнту за довіру. Магазин "Весна" — це ваш надійний помічник у виборі свіжих продуктів щодня.
+    135.     </p>
+    136. </div>
+
+В.8 cart.php
+GitHub репозиторій: https://github.com/NureIuzkovOleksandr/smp-pzpi-23-4-iuzkov-oleksandr/blob/main/Lab3/smp-pzpi-23-4-iuzkov-oleksandr-lab3/pages/cart.php
+    137. <?php
+    138. session_start();
+    139. 
+    140. $totalPrice = 0;
+    141. 
+    142. if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    143.     if (!empty($_POST['remove_id'])) {
+    144.         $removeId = $_POST['remove_id'];
+    145.         if (isset($_SESSION['shopping_cart'][$removeId])) {
+    146.             unset($_SESSION['shopping_cart'][$removeId]);
+    147.         }
+    148.     } elseif (!empty($_POST['action'])) {
+    149.         switch ($_POST['action']) {
+    150.             case 'clear':
+    151.                 $_SESSION['shopping_cart'] = [];
+    152.                 break;
+    153.             case 'pay':
+    154.                 $_SESSION['shopping_cart'] = [];
+    155.                 $_SESSION['success_message'] = 'Дякуємо за покупку!';
+    156.                 header('Location: /cart');
+    157.                 exit;
+    158.         }
+    159.     }
+    160. }
+    161. 
+    162. $cartItems = $_SESSION['shopping_cart'] ?? [];
+    163. $successMsg = $_SESSION['success_message'] ?? null;
+    164. unset($_SESSION['success_message']);
+    165. ?>
+    166. 
+    167. <div class="cart-page">
+    168.     <?php if ($successMsg): ?>
+    169.         <div class="cart-success"><?php echo htmlspecialchars($successMsg); ?></div>
+    170.     <?php endif; ?>
+    171. 
+    172.     <?php if (empty($cartItems)): ?>
+    173.         <div class="cart-empty">
+    174.             <p>Ваш кошик порожній.</p>
+    175.             <a href="/products" class="button-link">Перейти до покупок</a>
+    176.         </div>
+    177.     <?php else: ?>
+    178.         <h2 class="cart-title">Ваш кошик</h2>
+    179.         <table class="cart-table">
+    180.             <thead>
+    181.                 <tr>
+    182.                     <th>ID</th>
+    183.                     <th>Назва</th>
+    184.                     <th>Ціна</th>
+    185.                     <th>Кількість</th>
+    186.                     <th>Сума</th>
+    187.                     <th>Дія</th>
+    188.                 </tr>
+    189.             </thead>
+    190.             <tbody>
+    191.                 <?php foreach ($cartItems as $productId => $product): 
+    192.                     $lineTotal = $product['price'] * $product['quantity'];
+    193.                     $totalPrice += $lineTotal;
+    194.                 ?>
+    195.                 <tr>
+    196.                     <td><?php echo $productId; ?></td>
+    197.                     <td><?php echo htmlspecialchars($product['name']); ?></td>
+    198.                     <td><?php echo $product['price']; ?> грн</td>
+    199.                     <td><?php echo $product['quantity']; ?></td>
+    200.                     <td><?php echo $lineTotal; ?> грн</td>
+    201.                     <td>
+    202.                         <form method="POST">
+    203.                             <input type="hidden" name="remove_id" value="<?php echo $productId; ?>">
+    204.                             <button type="submit" class="btn-delete">Видалити</button>
+    205.                         </form>
+    206.                     </td>
+    207.                 </tr>
+    208.                 <?php endforeach; ?>
+    209.                 <tr class="cart-total-row">
+    210.                     <td colspan="4" style="text-align: right;">Разом:</td>
+    211.                     <td colspan="2"><?php echo $totalPrice; ?> грн</td>
+    212.                 </tr>
+    213.             </tbody>
+    214.         </table>
+    215. 
+    216.         <form method="POST" class="cart-actions">
+    217.             <button type="submit" name="action" value="clear" class="btn-clear">Очистити</button>
+    218.             <button type="submit" name="action" value="pay" class="btn-pay">Сплатити</button>
+    219.         </form>
+    220.     <?php endif; ?>
+    221. </div>
+
+В.9 home.php
+GitHub репозиторій: https://github.com/NureIuzkovOleksandr/smp-pzpi-23-4-iuzkov-oleksandr/blob/main/Lab3/smp-pzpi-23-4-iuzkov-oleksandr-lab3/pages/home.php
+    222. <h1 aria-label="Продовольчий магазин Весна">
+    223.     <span>Продовольчий магазин "Весна"</span>
+    224. </h1>
+
+В.10 page_404.php
+GitHub репозиторій: https://github.com/NureIuzkovOleksandr/smp-pzpi-23-4-iuzkov-oleksandr/blob/main/Lab3/smp-pzpi-23-4-iuzkov-oleksandr-lab3/pages/page_404.php
+    225. <?php
+    226.     http_response_code(404);
+    227. ?>
+    228. 
+    229. 
+    230. <section class="error-page">
+    231.     <header>
+    232.         <h1>404</h1>
+    233.         <h2>Сторінку не знайдено</h2>
+    234.     </header>
+    235.     <p>
+    236.         Можливо, ви ввели неправильну адресу або сторінка була видалена.
+    237.     </p>
+    238.     <nav>
+    239.         <a href="/" class="button" role="button" aria-label="Повернутись на головну">Повернутись на головну</a>
+    240.     </nav>
+    241. </section>
+
+В.11 products.php
+GitHub репозиторій: https://github.com/NureIuzkovOleksandr/smp-pzpi-23-4-iuzkov-oleksandr/blob/main/Lab3/smp-pzpi-23-4-iuzkov-oleksandr-lab3/pages/products.php
+    242. <?php 
+    243. session_start();
+    244. require_once __DIR__ . '/../database/database_functions.php';
+    245. $databaseConnection = createConnection();
+    246. $availableProducts = fetchProducts($databaseConnection);
+    247. 
+    248. $previousInput = $_SESSION['input_data'] ?? [];
+    249. $errorMessage = $_SESSION['input_error'] ?? '';
+    250. unset($_SESSION['input_data'], $_SESSION['input_error']);
+    251. ?>
+    252. 
+    253. <div class="product-page">
+    254.     <h1>Доступні товари</h1>
+    255. 
+    256.     <?php if ($errorMessage): ?>
+    257.     <div class="error-message"><?php echo htmlspecialchars($errorMessage); ?></div>
+    258.     <?php endif; ?>
+    259. 
+    260.     <form method="POST" action="/utils/save_to_cart.php" class="product-selection-form">
+    261.         <table class="custom-table">
+    262.             <thead>
+    263.                 <tr>
+    264.                     <th>ID</th>
+    265.                     <th>Назва</th>
+    266.                     <th>Кількість</th>
+    267.                     <th>Ціна</th>
+    268.                 </tr>
+    269.             </thead>
+    270.             <tbody>
+    271.                 <?php foreach ($availableProducts as $item): 
+    272.                 $productId = $item['id'];
+    273.                 $quantityValue = $previousInput[$productId]['quantity'] ?? 0;
+    274.             ?>
+    275.                 <tr>
+    276.                     <td><?php echo $productId; ?></td>
+    277.                     <td><?php echo htmlspecialchars($item['name']); ?></td>
+    278.                     <td>
+    279.                         <input type="hidden" name="cart[<?php echo $productId; ?>][name]"
+    280.                             value="<?php echo htmlspecialchars($item['name']); ?>">
+    281.                         <input type="number" name="cart[<?php echo $productId; ?>][quantity]"
+    282.                             value="<?php echo htmlspecialchars($quantityValue); ?>" class="quantity-input">
+    283.                         <input type="hidden" name="cart[<?php echo $productId; ?>][price]"
+    284.                             value="<?php echo $item['price']; ?>">
+    285.                     </td>
+    286.                     <td><?php echo $item['price']; ?> грн</td>
+    287.                 </tr>
+    288.                 <?php endforeach; ?>
+    289.             </tbody>
+    290.         </table>
+    291. 
+    292.         <div class="form-actions">
+    293.             <button type="submit" class="submit-button">Додати до кошика</button>
+    294.         </div>
+    295.     </form>
+    296. </div>
