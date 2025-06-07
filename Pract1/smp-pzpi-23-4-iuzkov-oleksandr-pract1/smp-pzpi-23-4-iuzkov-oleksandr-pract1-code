@@ -1,0 +1,110 @@
+#!/bin/bash
+
+check_arguments() {
+    if [ $# -ne 2 ]; then
+        echo "Увага! Потрібно вказати два параметри: висоту та ширину снігу!" >&2
+        exit 1
+    fi
+
+    if [ "$1" -le 0 ] || [ "$2" -le 0 ]; then
+        echo "Помилка: обидва значення мають бути більші за нуль!" >&2
+        exit 2
+    fi
+
+    if [ "$1" -lt 8 ] || [ "$2" -lt 7 ]; then
+        echo "На жаль, із заданими розмірами неможливо створити ялинку." >&2
+        exit 3
+    fi
+
+    local diff=$(( $1 - $2 ))
+    case $diff in
+        0|1|2) ;;
+        *) echo "Недопустиме співвідношення висоти до снігу. Перевірте параметри!" >&2; exit 4 ;;
+    esac
+
+    if [ $(( $1 % 2 )) -ne 0 ] && [ $(( $2 % 2 )) -ne 0 ]; then
+        if [ $diff -eq 0 ]; then
+            echo "Параметри не дозволяють збудувати симетричну ялинку!" >&2
+            exit 5
+        fi
+    fi
+
+    if [ $(( $1 % 2 )) -eq 0 ] && [ $(( $2 % 2 )) -eq 0 ]; then
+        if [ $diff -eq 2 ]; then
+            echo "Параметри не дозволяють збудувати симетричну ялинку!" >&2
+            exit 6
+        fi
+    fi
+}
+
+print_tree_line() {
+    local indent=$1
+    local length=$2
+    local symbol=$3
+
+    local i=0
+    while [ $i -lt $indent ]; do
+        echo -n " "
+        ((i++))
+    done
+
+    j=0
+    until [ $j -ge $length ]; do
+        echo -n "$symbol"
+        ((j++))
+    done
+    echo
+}
+
+    TREE_HEIGHT=$1
+    SNOW_WIDTH=$2
+    check_arguments "$TREE_HEIGHT" "$SNOW_WIDTH"
+
+    TOP_PART_HEIGHT=$(((TREE_HEIGHT - 2) / 2))
+    MAX_TRIANGLE_WIDTH=$((SNOW_WIDTH - 2))
+    CURRENT_MARK="*"
+
+    for ((width = 1; width <= MAX_TRIANGLE_WIDTH; width += 2)); do
+        padding=$(( (SNOW_WIDTH - width) / 2 ))
+        print_tree_line $padding $width "$CURRENT_MARK"
+
+        if [ "$CURRENT_MARK" == "*" ]; then
+            CURRENT_MARK="#"
+        else
+            CURRENT_MARK="*"
+        fi
+    done
+
+    if [ "$CURRENT_MARK" == "*" ]; then
+        CURRENT_MARK="#"
+    else
+        CURRENT_MARK="*"
+    fi
+
+    for level in $(seq 3 2 $MAX_TRIANGLE_WIDTH); do
+        margin=$(( (SNOW_WIDTH - level) / 2 ))
+
+        if [ "$CURRENT_MARK" == "*" ]; then
+            CURRENT_MARK="#"
+        else
+            CURRENT_MARK="*"
+        fi
+
+        print_tree_line $margin $level "$CURRENT_MARK"
+    done
+
+    for ((step = 0; step < 2; step++)); do
+        space=$(( (SNOW_WIDTH - 3) / 2 ))
+        print_tree_line $space 3 "#"
+    done
+
+    if [ $((SNOW_WIDTH % 2)) -eq 0 ]; then
+        SNOW_WIDTH=$((SNOW_WIDTH - 1))
+    fi
+
+    k=0
+    while [ $k -lt $SNOW_WIDTH ]; do
+        echo -n "*"
+        ((k++))
+    done
+    echo
